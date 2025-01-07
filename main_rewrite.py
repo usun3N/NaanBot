@@ -15,25 +15,20 @@ class Embed_Tool:
     def build_request_embed(request_id: str):
         build_request = database.get_build_request(request_id)
         request_id, category_name, sender_id, status, processor_user_id = build_request
-
-        embed = {
-            "title": "Build Request",
-            "fields": [
-                {"name": "リクエストID", "value": request_id, "inline": False},
-                {"name": "カテゴリー名", "value": category_name, "inline": False},
-                {"name": "送信者", "value": sender_id, "inline": False},
-                {"name": "送信者ID", "value": sender_id, "inline": False},
-                {"name": "状態", "value": status, "inline": False},
-                {"name": "担当者", "value": processor_user_id, "inline": False},
-                {"name": "担当者ID", "value": processor_user_id, "inline": False},
-            ]
-        }
+        embed = discord.Embed(title="Build Request")
+        embed.add_field(name="リクエストID", value=request_id, inline=False)
+        embed.add_field(name="カテゴリー名", value=category_name, inline=False)
+        embed.add_field(name="送信者", value=sender_id, inline=False)
+        embed.add_field(name="送信者ID", value=sender_id, inline=False)
+        embed.add_field(name="状態", value=status, inline=False)
+        embed.add_field(name="担当者", value=processor_user_id, inline=False)
+        embed.add_field(name="担当者ID", value=processor_user_id, inline=False)
         if status == "待機中":
-            embed["color"] = discord.Color.blurple()
+            embed.color = discord.Color.blurple()
         elif status == "承認":
-            embed["color"] = discord.Color.green()
+            embed.color = discord.Color.green()
         elif status == "拒否":
-            embed["color"] = discord.Color.red()
+            embed.color = discord.Color.red()
         return embed
 
     def embed_to_dict(embed: discord.Embed):
@@ -250,7 +245,7 @@ async def build_request(ctx: discord.ApplicationContext, name: str):
     database.add_build_request(request_id, name, ctx.author.id, "待機中", 0)
     embed = Embed_Tool.build_request_embed(request_id)
     await message.edit("", embed=embed, view=view)
-    await ctx.respond(f"", embed=embed())
+    await ctx.respond(f"", embed=embed)
 
 @bot.slash_command(guild_ids=guild_ids)
 async def stop(ctx: discord.ApplicationContext):
