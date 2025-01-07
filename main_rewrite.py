@@ -14,14 +14,14 @@ bot = discord.Bot()
 class Embed_Tool:
     def build_request_embed(request_id: str):
         build_request = database.get_build_request(request_id)
-        request_id, category_name, sender_id, status, processor_user_id = build_request
+        request_id, category_name, sender_id, sender_name, status, processor_user_id, processor_user_name = build_request
         embed = discord.Embed(title="Build Request")
         embed.add_field(name="リクエストID", value=request_id, inline=False)
         embed.add_field(name="カテゴリー名", value=category_name, inline=False)
-        embed.add_field(name="送信者", value=sender_id, inline=False)
+        embed.add_field(name="送信者", value=sender_name, inline=False)
         embed.add_field(name="送信者ID", value=sender_id, inline=False)
         embed.add_field(name="状態", value=status, inline=False)
-        embed.add_field(name="担当者", value=processor_user_id, inline=False)
+        embed.add_field(name="担当者", value=processor_user_name, inline=False)
         embed.add_field(name="担当者ID", value=processor_user_id, inline=False)
         if status == "待機中":
             embed.color = discord.Color.blurple()
@@ -48,20 +48,20 @@ class DataBase:
         db_path = "db.sqlite3"
         self.db = sqlite3.connect(db_path)
         cur = self.db.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS build_request(request_id TEXT PRIMARY KEY, category_name TEXT, sender_id INTEGER, status TEXT, processor_user_id INTEGER)")
+        cur.execute("CREATE TABLE IF NOT EXISTS build_request(request_id TEXT PRIMARY KEY, category_name TEXT, sender_id INTEGER, sender_name TEXT, status TEXT, processor_user_id INTEGER, processor_name TEXT)")
         cur.execute("CREATE TABLE IF NOT EXISTS category(build_id TEXT PRIMARY KEY, category_id INTEGER, guild_id INTEGER, name TEXT, moderator_channel_id INTEGER, owner_id INTEGER, role_id INTEGER)")
         cur.execute("CREATE TABLE IF NOT EXISTS guild_settings(guild_id INTEGER PRIMARY KEY, moderator_channel_id INTEGER, notification_channel_id INTEGER, moderator_role_id INTEGER)")
         cur.execute("CREATE TABLE IF NOT EXISTS join_request(request_id INTEGER PRIMARY KEY, build_id TEXT, sender_id INTEGER, status TEXT, processor_user_id INTEGER)")
     
-    def add_build_request(self, request_id: str, category_name: str, sender_id: int, status: str, processor_user_id: int):
+    def add_build_request(self, request_id: str, category_name: str, sender_id: int, sender_name: str, status: str, processor_user_id: int, processor_name: str):
         cur = self.db.cursor()
-        sql = f"INSERT INTO build_request VALUES ('{request_id}', '{category_name}', {sender_id}, '{status}', {processor_user_id})"
+        sql = f"INSERT INTO build_request VALUES ('{request_id}', '{category_name}', {sender_id}, '{sender_name}', '{status}', {processor_user_id}, '{processor_name}')"
         cur.execute(sql)
         self.db.commit()
     
-    def update_status_build_request(self, request_id: str, processor_user_id: int, status: str):
+    def update_status_build_request(self, request_id: str, processor_user_id: int, processor_name: str, status: str):
         cur = self.db.cursor()
-        sql = f"UPDATE build_request SET status = '{status}', processor_user_id = {processor_user_id} WHERE request_id = '{request_id}'"
+        sql = f"UPDATE build_request SET status = '{status}', processor_user_id = {processor_user_id}, processor_name = '{processor_name}' WHERE request_id = '{request_id}'"
         cur.execute(sql)
         self.db.commit()
     
@@ -118,6 +118,12 @@ class DataBase:
         sql = f"SELECT * FROM guild_settings WHERE guild_id = {guild_id}"
         cur.execute(sql)
         return cur.fetchone()
+    
+    def get_request_list(self):
+        cur = self.db.cursor()
+        sql = f"SELECT request_id, category_name, sender_name FROM build_request WHERE status = '待機中'"
+        cur.execute(sql)
+        return cur.fetchall()
     def close(self):
         self.db.close()
     
@@ -127,9 +133,9 @@ class BuildRequestView(discord.ui.View):
         message = interaction.message
         embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
         request_id = embed_data["リクエストID"]
-        database.update_status_build_request(request_id, interaction.user.id, "承認")
-        request_id, category_name, sender_id, status, processor_user_id = database.get_build_request(request_id)
-        sender = bot.get_user(sender_id)
+        database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "承認")
+        request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
+        sender = interaction.guild.get_member(sender_id)
         embed = Embed_Tool.build_request_embed(request_id)
         await sender.send("Build Request Accepted", embed=embed)
         await interaction.message.edit("", embed=embed, view=None)
@@ -163,9 +169,11 @@ class BuildRequestView(discord.ui.View):
         message = interaction.message
         embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
         request_id = embed_data["リクエストID"]
-        database.update_status_build_request(request_id, interaction.user.id, "拒否")
+        database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "拒否")
+        request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
         embed = Embed_Tool.build_request_embed(request_id)
-        await build_request.sender.send("Build Request Denied", embed=embed)
+        sender = interaction.guild.get_member(sender_id)
+        await sender.send("Build Request Denied", embed=embed)
         await interaction.message.edit("", embed=embed, view=None)
 
 class JoinRequestView(discord.ui.View):
@@ -242,7 +250,7 @@ async def build_request(ctx: discord.ApplicationContext, name: str):
     view = BuildRequestView()
     message = await moderation_channel.send("loading")
     request_id = str(uuid4())
-    database.add_build_request(request_id, name, ctx.author.id, "待機中", 0)
+    database.add_build_request(request_id, name, ctx.author.id, ctx.author.display_name,"待機中", 0, "---")
     embed = Embed_Tool.build_request_embed(request_id)
     await message.edit("", embed=embed, view=view)
     await ctx.respond(f"", embed=embed)
@@ -255,6 +263,19 @@ async def stop(ctx: discord.ApplicationContext):
         await bot.close()
     else:
         await ctx.respond("You are not authorized to use this command", ephemeral=True)
+
+@bot.slash_command(guild_ids=guild_ids)
+async def get_build_request_list(ctx: discord.ApplicationContext):
+    result = ""
+    for request_id, category_name, sender_name in database.get_request_list():
+        result += f"ID: {request_id} \nカテゴリー名: {category_name} \n送信者: {sender_name}\n\n"
+    await ctx.respond(result, ephemeral=True)
+
+@bot.slash_command(guild_ids=guild_ids)
+async def get_build_request(ctx: discord.ApplicationContext, request_id: str):
+    request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
+    embed = Embed_Tool.build_request_embed(request_id)
+    await ctx.respond("", embed=embed, ephemeral=True)
 
 database = DataBase()
 bot.run(token)
