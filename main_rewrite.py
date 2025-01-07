@@ -153,7 +153,7 @@ class DataBase:
 
     def get_join_request_list(self):
         cur = self.db.cursor()
-        sql = f"SELECT request_id, category_name, sender_name FROM join_request WHERE status = '待機中'"
+        sql = f"SELECT request_id, build_id, category_name, sender_name FROM join_request WHERE status = '待機中'"
         cur.execute(sql)
         return cur.fetchall()
     
@@ -400,6 +400,70 @@ async def help(ctx: discord.ApplicationContext):
     /stop - Botを止める(ユーのみ)```
     """
     await ctx.respond(result, ephemeral=True)
+
+@bot.slash_command(guild_ids=guild_ids)
+async def accept_build_request(ctx: discord.ApplicationContext, request_id: str):
+    database.update_status_build_request(request_id, ctx.author.id, ctx.author.display_name, "承認")
+    build_request = database.get_build_request(request_id)
+    if not build_request:
+        await ctx.respond("Build request not found", ephemeral=True)
+        return
+    request_id, category_name, sender_id, sender_name, status, processor_user_id, processor_name = build_request
+    if status != "待機中":
+        await ctx.respond("This request is not waiting", ephemeral=True)
+        return
+    guild = ctx.guild
+    guild_settings = database.get_guild_settings(guild.id)
+    if not guild_settings:
+        await ctx.respond("guild settings not found", ephemeral=True)
+        return
+    _, _, _, moderator_role_id = guild_settings
+    if not ctx.author.get_role(moderator_role_id):
+        await ctx.respond("You are not authorized to use this command", ephemeral=True)
+        return
+    new_role = await guild.create_role(name=category_name)
+    sender = guild.get_member(sender_id)
+    general_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=True),
+        sender: discord.PermissionOverwrite(manage_channels=True)
+    }
+    moderator_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=False),
+        sender: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
+    }
+
+    category = await guild.create_category(name=category_name, overwrites=general_overwrites)
+    general_channel = await guild.create_text_channel(name="一般", category=category)
+    moderator_channel = await guild.create_text_channel(name="管理者用", category=category, overwrites=moderator_overwrites)
+    await general_channel.send(f"作成が完了しました")
+    await moderator_channel.send(f"{sender.mention} 参加申請があった場合はこのチャンネルに通知されます。このチャンネルはこのカテゴリーの管理者にのみ表示されます。")
+    await sender.add_roles(new_role)
+    database.add_category(request_id, category.id, guild.id, category_name, moderator_channel.id, sender_id, new_role.id)
+
+
+@bot.slash_command(guild_ids=guild_ids)
+async def accept_join_request(ctx: discord.ApplicationContext, request_id: str):
+    database.update_status_join_request(request_id, ctx.author.id, ctx.author.display_name, "承認")
+    join_request = database.get_join_request(request_id)
+    if not join_request:
+        await ctx.respond("Join request not found", ephemeral=True)
+        return
+    request_id, build_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = join_request
+    if status != "待機中":
+        await ctx.respond("This request is not waiting", ephemeral=True)
+        return
+    category = database.get_category(build_id)
+    build_id, category_id, guild_id, name, moderator_channel_id, owner_id, role_id = category
+    if ctx.channel_id != moderator_channel_id:
+        await ctx.respond("Here is not moderation channel", ephemeral=True)
+        return
+    role = ctx.guild.get_role(role_id)
+    sender = ctx.guild.get_member(sender_id)
+    embed = Embed_Tool.join_request_embed(request_id)
+    await sender.add_roles(role)
+    await sender.send("Join Request Accepted", embed=embed)
 
 database = DataBase()
 bot.run(token)
