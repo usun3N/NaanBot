@@ -462,6 +462,7 @@ async def accept_join_request(ctx: discord.ApplicationContext, request_id: str):
     embed = Embed_Tool.join_request_embed(request_id)
     await sender.add_roles(role)
     await sender.send("Join Request Accepted", embed=embed)
+    await ctx.respond("Join Request Accepted", embed=embed)
 
 database = DataBase()
 bot.run(token)
