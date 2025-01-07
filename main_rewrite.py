@@ -360,6 +360,8 @@ async def get_build_request_list(ctx: discord.ApplicationContext):
     result = ""
     for request_id, category_name, sender_name in database.get_build_request_list():
         result += f"ID: {request_id} \nカテゴリー名: {category_name} \n送信者: {sender_name}\n\n"
+    if not result:
+        result = "Build request not found"
     await ctx.respond(result, ephemeral=True)
 
 @bot.slash_command(guild_ids=guild_ids)
@@ -378,6 +380,8 @@ async def get_join_request_list(ctx: discord.ApplicationContext):
     result = ""
     for request_id, build_id, category_name, sender_name in database.get_join_request_list():
         result += f"ID: {request_id} \nBuild ID: {build_id} \nカテゴリー名: {category_name} \n送信者: {sender_name}\n\n"
+    if not result:
+        result = "Join request not found"
     await ctx.respond(result, ephemeral=True)
 
 @bot.slash_command(guild_ids=guild_ids)
