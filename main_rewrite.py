@@ -413,9 +413,6 @@ async def accept_build_request(ctx: discord.ApplicationContext, request_id: str)
         await ctx.respond("Build request not found", ephemeral=True)
         return
     request_id, category_name, sender_id, sender_name, status, processor_user_id, processor_name = build_request
-    if status != "待機中":
-        await ctx.respond("This request is not waiting", ephemeral=True)
-        return
     guild = ctx.guild
     guild_settings = database.get_guild_settings(guild.id)
     if not guild_settings:
@@ -455,9 +452,6 @@ async def accept_join_request(ctx: discord.ApplicationContext, request_id: str):
         await ctx.respond("Join request not found", ephemeral=True)
         return
     request_id, build_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = join_request
-    if status != "待機中":
-        await ctx.respond("This request is not waiting", ephemeral=True)
-        return
     category = database.get_category(build_id)
     build_id, category_id, guild_id, name, moderator_channel_id, owner_id, role_id = category
     if ctx.channel_id != moderator_channel_id:
