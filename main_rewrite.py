@@ -159,6 +159,7 @@ class BuildRequestView(discord.ui.View):
         moderator_channel = await guild.create_text_channel(name="管理者用", category=category, overwrites=moderator_overwrites)
         await general_channel.send(f"作成が完了しました")
         await moderator_channel.send(f"{sender.mention} 参加申請があった場合はこのチャンネルに通知されます。このチャンネルはこのカテゴリーの管理者にのみ表示されます。")
+        sender.add_roles(new_role)
 
         guild_data = interaction.guild
         database.add_category(request_id, category.id, guild_data.id, category_name, moderator_channel.id, sender_id, new_role.id)
@@ -276,6 +277,40 @@ async def get_build_request(ctx: discord.ApplicationContext, request_id: str):
     request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
     embed = Embed_Tool.build_request_embed(request_id)
     await ctx.respond("", embed=embed, ephemeral=True)
+
+@bot.slash_command(guild_ids=guild_ids)
+async def accept(ctx: discord.ApplicationContext, request_id: str):
+    request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
+    _, _, _, moderator_role_id = database.get_guild_settings(ctx.guild_id)
+    if ctx.author.get_role(moderator_role_id) is None:
+        await ctx.respond("You are not authorized to use this command", ephemeral=True)
+        return
+    guild = ctx.guild
+    sender = guild.get_member(sender_id)
+    database.update_status_build_request(request_id, ctx.author.id, ctx.author.display_name, "承認")
+    embed = Embed_Tool.build_request_embed(request_id)
+    await ctx.respond("", embed=embed, ephemeral=True)
+    new_role = await guild.create_role(name=category_name)
+
+    general_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=True),
+        sender: discord.PermissionOverwrite(manage_channels=True)
+    }
+    moderator_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=False),
+        sender: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
+    }
+
+    category = await guild.create_category(name=category_name, overwrites=general_overwrites)
+    general_channel = await guild.create_text_channel(name="一般", category=category)
+    moderator_channel = await guild.create_text_channel(name="管理者用", category=category, overwrites=moderator_overwrites)
+    await general_channel.send(f"作成が完了しました")
+    await moderator_channel.send(f"{sender.mention} 参加申請があった場合はこのチャンネルに通知されます。このチャンネルはこのカテゴリーの管理者にのみ表示されます。")
+    await sender.add_roles(new_role)
+
+    database.add_category(request_id, category.id, guild.id, category_name, moderator_channel.id, sender_id, new_role.id)
 
 database = DataBase()
 bot.run(token)
