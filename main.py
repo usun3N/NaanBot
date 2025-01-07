@@ -1,5 +1,6 @@
 import json
 import discord
+import sqlite3
 
 guild_ids = [732561587788972112, 1220365157113532426]
 with open("keys.json", "r") as f:
@@ -206,6 +207,14 @@ async def build_request(ctx: discord.ApplicationContext, name: str):
     await message.edit("", embed=build_request.get_embed(), view=view)
     build_request_dict[message.id] = build_request
     await ctx.respond(f"", embed=build_request.get_send_embed())
+
+@bot.slash_command(guild_ids=guild_ids)
+async def stop(ctx: discord.ApplicationContext):
+    if ctx.author.id == 423662596533518358:
+        await ctx.respond("Bot stopped", ephemeral=True)
+        await bot.close()
+    else:
+        await ctx.respond("You are not authorized to use this command", ephemeral=True)
 
 data = Data_Storage()
 bot.run(token)
