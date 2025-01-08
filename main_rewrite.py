@@ -2,8 +2,9 @@ import json
 import discord
 import sqlite3
 from uuid import uuid4
-
-guild_ids = [732561587788972112, 1220365157113532426]
+# 一時的な変更
+# guild_ids = [732561587788972112, 1220365157113532426]
+guild_ids = [1326334355832049704]
 with open("keys.json", "r") as f:
     keys = json.load(f)
 token = keys["discord-token"]
@@ -159,86 +160,51 @@ class DataBase:
     
     def close(self):
         self.db.close()
-    
+
+class BuildRequestAcceptButton(discord.ui.Button):
+    def __init__(self, request_id: str):
+        super().__init__(discord.ui.Button(
+            label="Accept",
+            custom_id=f"build_accept_{request_id}",
+            style=discord.ButtonStyle.green
+        ))
+
+class BuildRequestDenyButton(discord.ui.Button):
+    def __init__(self, request_id: str):
+        super().__init__(discord.ui.Button(
+            label="Deny",
+            custom_id=f"build_deny_{request_id}",
+            style=discord.ButtonStyle.red
+        ))
+
+class JoinRequestAcceptButton(discord.ui.Button):
+    def __init__(self, request_id: str):
+        super().__init__(discord.ui.Button(
+            label="Accept",
+            custom_id=f"join_accept_{request_id}",
+            style=discord.ButtonStyle.green
+        ))
+
+class JoinRequestDenyButton(discord.ui.Button):
+    def __init__(self, request_id: str):
+        super().__init__(discord.ui.Button(
+            label="Deny",
+            custom_id=f"join_deny_{request_id}",
+            style=discord.ButtonStyle.red
+        ))
+
 class BuildRequestView(discord.ui.View):
-    @discord.ui.button(label="Accept",row=0, style=discord.ButtonStyle.green)
-    async def accept_button_callback(self, button: discord.ui.Button ,interaction: discord.Interaction):
-        message = interaction.message
-        embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
-        request_id = embed_data["リクエストID"]
-        database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "承認")
-        request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
-        sender = interaction.guild.get_member(sender_id)
-        embed = Embed_Tool.build_request_embed(request_id)
-        await sender.send("Build Request Accepted", embed=embed)
-        await interaction.message.edit("", embed=embed, view=None)
-
-        guild = interaction.guild
-        new_role = await guild.create_role(name=category_name)
-
-        general_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            new_role: discord.PermissionOverwrite(view_channel=True),
-            sender: discord.PermissionOverwrite(manage_channels=True)
-        }
-        moderator_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            new_role: discord.PermissionOverwrite(view_channel=False),
-            sender: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
-        }
-
-        category = await guild.create_category(name=category_name, overwrites=general_overwrites)
-        general_channel = await guild.create_text_channel(name="一般", category=category)
-        moderator_channel = await guild.create_text_channel(name="管理者用", category=category, overwrites=moderator_overwrites)
-        await general_channel.send(f"作成が完了しました")
-        await moderator_channel.send(f"{sender.mention} 参加申請があった場合はこのチャンネルに通知されます。このチャンネルはこのカテゴリーの管理者にのみ表示されます。")
-        await sender.add_roles(new_role)
-
-        guild_data = interaction.guild
-        database.add_category(request_id, category.id, guild_data.id, category_name, moderator_channel.id, sender_id, new_role.id)
-        
+    def __init__(self, request_id: str):
+        super().__init__(timeout=None)
+        self.add_item(BuildRequestAcceptButton(request_id))
+        self.add_item(BuildRequestDenyButton(request_id))
     
-    @discord.ui.button(label="Deny", row=1, style=discord.ButtonStyle.red)
-    async def deny_button_callback(self, button: discord.ui.Button ,interaction: discord.Interaction):
-        message = interaction.message
-        embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
-        request_id = embed_data["リクエストID"]
-        database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "拒否")
-        request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
-        embed = Embed_Tool.build_request_embed(request_id)
-        sender = interaction.guild.get_member(sender_id)
-        await sender.send("Build Request Denied", embed=embed)
-        await interaction.message.edit("", embed=embed, view=None)
 
 class JoinRequestView(discord.ui.View):
-    @discord.ui.button(label="Accept",row=0, style=discord.ButtonStyle.green)
-    async def accept_button_callback(self, button: discord.ui.Button ,interaction: discord.Interaction):
-        message = interaction.message
-        embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
-        request_id = embed_data["リクエストID"]
-        database.update_status_join_request(request_id, interaction.user.id, interaction.user.display_name, "承認")
-        request_id, build_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_join_request(request_id)
-        category = database.get_category(build_id)
-        build_id, category_id, guild_id, name, moderator_channel_id, owner_id, role_id = category
-        role = interaction.guild.get_role(role_id)
-        sender = interaction.guild.get_member(sender_id)
-        embed = Embed_Tool.join_request_embed(request_id)
-        await sender.add_roles(role)
-        await sender.send("Join Request Accepted", embed=embed)
-        await interaction.message.edit("", embed=embed, view=None)
-
-    @discord.ui.button(label="Deny", row=1, style=discord.ButtonStyle.red)
-    async def deny_button_callback(self, button: discord.ui.Button ,interaction: discord.Interaction):
-        message = interaction.message
-        embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
-        request_id = embed_data["リクエストID"]
-        database.update_status_join_request(request_id, interaction.user.id, interaction.user.display_name, "拒否")
-        request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_join_request(request_id)
-        embed = Embed_Tool.join_request_embed(request_id)
-        sender = interaction.guild.get_member(sender_id)
-        await sender.send("Join Request Denied", embed=embed)
-        await interaction.message.edit("", embed=embed, view=None)
-    
+    def __init__(self, request_id: str):
+        super().__init__(timeout=None)
+        self.add_item(JoinRequestAcceptButton(request_id))
+        self.add_item(JoinRequestDenyButton(request_id))
     
 @bot.event
 async def on_ready():
@@ -267,7 +233,7 @@ async def join_request(ctx: discord.ApplicationContext, role: discord.Role):
     database.add_join_request(request_id, build_id, name, ctx.author.id, ctx.author.display_name, "待機中", 0, "---")
     guild = ctx.guild
     embed = Embed_Tool.join_request_embed(request_id)
-    await guild.get_channel(moderator_channel_id).send(f"{ctx.guild.get_member(owner_id).mention}", embed=embed, view=JoinRequestView())
+    await guild.get_channel(moderator_channel_id).send(f"{ctx.guild.get_member(owner_id).mention}", embed=embed, view=JoinRequestView(request_id))
     await ctx.respond(f"Join request sent to {role.name}", ephemeral=True)
     
     
@@ -327,7 +293,7 @@ async def build_request(ctx: discord.ApplicationContext, name: str):
         await ctx.respond("No channel set", ephemeral=True)
         return
     moderation_channel = ctx.guild.get_channel(moderation_channel_id)
-    view = BuildRequestView()
+    view = BuildRequestView(request_id)
     message = await moderation_channel.send("loading")
     request_id = str(uuid4())
     database.add_build_request(request_id, name, ctx.author.id, ctx.author.display_name,"待機中", 0, "---")
@@ -443,6 +409,9 @@ async def accept_build_request(ctx: discord.ApplicationContext, request_id: str)
     await sender.add_roles(new_role)
     database.add_category(request_id, category.id, guild.id, category_name, moderator_channel.id, sender_id, new_role.id)
 
+    embed = Embed_Tool.build_request_embed(request_id)
+    await ctx.respond("Build Request Accepted", embed=embed)
+
 
 @bot.slash_command(guild_ids=guild_ids)
 async def accept_join_request(ctx: discord.ApplicationContext, request_id: str):
@@ -463,6 +432,96 @@ async def accept_join_request(ctx: discord.ApplicationContext, request_id: str):
     await sender.add_roles(role)
     await sender.send("Join Request Accepted", embed=embed)
     await ctx.respond("Join Request Accepted", embed=embed)
+
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.type == discord.InteractionType.application_command:
+        pass
+    custom_id = interaction.data.get("custom_id")
+    if custom_id:
+        if custom_id.startswith("build_accept_"):
+            await build_request_accept_button_callback(interaction)
+        elif custom_id.startswith("build_deny_"):
+            await build_request_deny_button_callback(interaction)
+        elif custom_id.startswith("join_accept_"):
+            await join_request_accept_button_callback(interaction)
+        elif custom_id.startswith("join_deny_"):
+            await join_request_deny_button_callback(interaction)
+
+async def build_request_accept_button_callback(interaction: discord.Interaction):
+    message = interaction.message
+    embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
+    request_id = embed_data["リクエストID"]
+    database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "承認")
+    request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
+    sender = interaction.guild.get_member(sender_id)
+    embed = Embed_Tool.build_request_embed(request_id)
+    await sender.send("Build Request Accepted", embed=embed)
+    await interaction.message.edit("", embed=embed, view=None)
+
+    guild = interaction.guild
+    new_role = await guild.create_role(name=category_name)
+
+    general_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=True),
+        sender: discord.PermissionOverwrite(manage_channels=True)
+    }
+    moderator_overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        new_role: discord.PermissionOverwrite(view_channel=False),
+        sender: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
+    }
+
+    category = await guild.create_category(name=category_name, overwrites=general_overwrites)
+    general_channel = await guild.create_text_channel(name="一般", category=category)
+    moderator_channel = await guild.create_text_channel(name="管理者用", category=category, overwrites=moderator_overwrites)
+    await general_channel.send(f"作成が完了しました")
+    await moderator_channel.send(f"{sender.mention} 参加申請があった場合はこのチャンネルに通知されます。このチャンネルはこのカテゴリーの管理者にのみ表示されます。")
+    await sender.add_roles(new_role)
+
+    guild_data = interaction.guild
+    database.add_category(request_id, category.id, guild_data.id, category_name, moderator_channel.id, sender_id, new_role.id)
+
+async def build_request_deny_button_callback(interaction: discord.Interaction):
+    message = interaction.message
+    embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
+    request_id = embed_data["リクエストID"]
+    database.update_status_build_request(request_id, interaction.user.id, interaction.user.display_name, "拒否")
+    request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_build_request(request_id)
+    embed = Embed_Tool.build_request_embed(request_id)
+    sender = interaction.guild.get_member(sender_id)
+    await sender.send("Build Request Denied", embed=embed)
+    await interaction.message.edit("", embed=embed, view=None)
+
+async def join_request_accept_button_callback(interaction: discord.Interaction):
+    message = interaction.message
+    embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
+    request_id = embed_data["リクエストID"]
+    database.update_status_join_request(request_id, interaction.user.id, interaction.user.display_name, "承認")
+    request_id, build_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_join_request(request_id)
+    category = database.get_category(build_id)
+    build_id, category_id, guild_id, name, moderator_channel_id, owner_id, role_id = category
+    role = interaction.guild.get_role(role_id)
+    sender = interaction.guild.get_member(sender_id)
+    embed = Embed_Tool.join_request_embed(request_id)
+    await sender.add_roles(role)
+    await sender.send("Join Request Accepted", embed=embed)
+    await interaction.message.edit("", embed=embed, view=None)
+
+async def join_request_deny_button_callback(interaction: discord.Interaction):
+    message = interaction.message
+    embed_data = Embed_Tool.embed_to_dict(message.embeds[0])
+    request_id = embed_data["リクエストID"]
+    database.update_status_join_request(request_id, interaction.user.id, interaction.user.display_name, "拒否")
+    request_id, category_name, sender_id, sernder_name, status, processor_user_id, processor_user_name = database.get_join_request(request_id)
+    embed = Embed_Tool.join_request_embed(request_id)
+    sender = interaction.guild.get_member(sender_id)
+    await sender.send("Join Request Denied", embed=embed)
+    await interaction.message.edit("", embed=embed, view=None)
+
+
 
 database = DataBase()
 bot.run(token)
